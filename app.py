@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import os
-import queue
-import queueinter as tk
+import threading
+import tkinter as tk
 import traceback
-import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-from typing import List, Optional
+from typing import List
 
 from lotf2_difficulty import __version__
 from lotf2_difficulty.patch import default_backup_dir, patch_slot
