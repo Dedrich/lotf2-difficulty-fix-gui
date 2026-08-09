@@ -16,8 +16,8 @@ from lotf2_difficulty.patch import default_backup_dir, patch_slot
 from lotf2_difficulty.slots import CharacterSlot, default_save_dir, list_character_slots
 
 APP_TITLE = "LOTF2 Difficulty Fix"
-APP_WIDTH = 920
-APP_HEIGHT = 640
+APP_WIDTH = 960
+APP_HEIGHT = 700
 
 
 def _short_diff(label: str) -> str:
@@ -35,7 +35,12 @@ class App(tk.Tk):
         super().__init__()
         self.title(f"{APP_TITLE}  v{__version__}")
         self.geometry(f"{APP_WIDTH}x{APP_HEIGHT}")
-        self.minsize(780, 520)
+        self.minsize(820, 600)
+        # Prefer a light background so the green Apply button stands out
+        try:
+            self.configure(background="#f0f0f0")
+        except tk.TclError:
+            pass
 
         self.save_dir = tk.StringVar(value=str(default_save_dir()))
         self.mode = tk.StringVar(value="Veteran")
@@ -70,10 +75,94 @@ class App(tk.Tk):
         style.configure("Status.TLabel", font=("Segoe UI", 9))
 
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=14)
+        root = ttk.Frame(self, padding=12)
         root.pack(fill=tk.BOTH, expand=True)
 
-        # Header
+        # ---- Bottom chrome first so it is NEVER pushed off-screen ----
+        # Status line (very bottom)
+        status_fr = ttk.Frame(root)
+        status_fr.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 0))
+        ttk.Label(status_fr, textvariable=self.status, style="Status.TLabel").pack(
+            side=tk.LEFT, anchor=tk.W
+        )
+
+        # Big APPLY bar — always visible
+        apply_bar = tk.Frame(root, bg="#1b5e20", padx=10, pady=10)
+        apply_bar.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0))
+
+        self.apply_btn = tk.Button(
+            apply_bar,
+            text="▶  APPLY FIX TO SELECTED CHARACTER(S)",
+            command=self.apply_fix,
+            font=("Segoe UI", 13, "bold"),
+            bg="#2e7d32",
+            fg="white",
+            activebackground="#1b5e20",
+            activeforeground="white",
+            relief=tk.RAISED,
+            bd=3,
+            padx=16,
+            pady=12,
+            cursor="hand2",
+        )
+        self.apply_btn.pack(fill=tk.X)
+
+        hint = tk.Label(
+            apply_bar,
+            text="1) Click a character above   2) Pick Veteran or Legacy   3) Press this green button",
+            bg="#1b5e20",
+            fg="#c8e6c9",
+            font=("Segoe UI", 9),
+        )
+        hint.pack(pady=(6, 0))
+
+        # Options just above the apply bar
+        opt = ttk.LabelFrame(root, text="What should we set?", padding=10)
+        opt.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
+
+        mode_row = ttk.Frame(opt)
+        mode_row.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(mode_row, text="Difficulty:", font=("Segoe UI", 10, "bold")).pack(
+            side=tk.LEFT, padx=(0, 12)
+        )
+        ttk.Radiobutton(
+            mode_row, text="Veteran  (harder)", variable=self.mode, value="Veteran"
+        ).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Radiobutton(
+            mode_row, text="Legacy / Normal", variable=self.mode, value="Legacy"
+        ).pack(side=tk.LEFT)
+
+        ttk.Checkbutton(
+            opt,
+            text="Also update the game’s automatic backup copies (SaveXX_b1 / _b2)  — recommended",
+            variable=self.include_rotating,
+        ).pack(anchor=tk.W)
+
+        # Secondary actions
+        actions = ttk.Frame(root)
+        actions.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
+        ttk.Button(actions, text="Open backups folder", command=self.open_backups).pack(
+            side=tk.LEFT, padx=(0, 6)
+        )
+        ttk.Button(actions, text="Open save folder", command=self.open_save_folder).pack(
+            side=tk.LEFT, padx=(0, 6)
+        )
+        ttk.Button(actions, text="Help", command=self.show_help).pack(side=tk.RIGHT)
+
+        # Activity log (compact)
+        log_fr = ttk.LabelFrame(root, text="Activity log", padding=6)
+        log_fr.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
+        self.log = tk.Text(
+            log_fr,
+            height=4,
+            wrap=tk.WORD,
+            font=("Consolas", 9),
+            state=tk.DISABLED,
+            background="#f7f7f7",
+        )
+        self.log.pack(fill=tk.BOTH, expand=True)
+
+        # ---- Top content (shrinks if needed) ----
         header = ttk.Frame(root)
         header.pack(fill=tk.X)
         ttk.Label(header, text=APP_TITLE, style="Title.TLabel").pack(anchor=tk.W)
@@ -88,27 +177,32 @@ class App(tk.Tk):
             text=(
                 "⚠  Fully quit Lords of the Fallen before applying. "
                 "A backup is created automatically. "
-                "If Steam Cloud is on, it may overwrite your fix — go offline once if needed."
+                "Steam Cloud can overwrite the fix — go offline once if it reverts."
             ),
             style="Warn.TLabel",
             wraplength=APP_WIDTH - 60,
             justify=tk.LEFT,
         )
-        warn.pack(fill=tk.X, pady=(10, 8))
+        warn.pack(fill=tk.X, pady=(8, 6))
 
-        # Folder row
         folder_fr = ttk.LabelFrame(root, text="Save folder", padding=8)
-        folder_fr.pack(fill=tk.X, pady=(0, 8))
+        folder_fr.pack(fill=tk.X, pady=(0, 6))
         row = ttk.Frame(folder_fr)
         row.pack(fill=tk.X)
         ent = ttk.Entry(row, textvariable=self.save_dir)
         ent.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
-        ttk.Button(row, text="Browse…", command=self.browse_folder).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(row, text="Browse…", command=self.browse_folder).pack(
+            side=tk.LEFT, padx=(0, 6)
+        )
         ttk.Button(row, text="Refresh list", command=self.refresh_list).pack(side=tk.LEFT)
 
-        # Character table
-        list_fr = ttk.LabelFrame(root, text="Your characters  (click to select — Ctrl/Shift for multiple)", padding=8)
-        list_fr.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+        # Character table fills remaining space
+        list_fr = ttk.LabelFrame(
+            root,
+            text="Your characters  —  click a row to select  (Ctrl+click for multiple)",
+            padding=8,
+        )
+        list_fr.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
 
         cols = ("slot", "name", "level", "difficulty", "modified")
         self.tree = ttk.Treeview(
@@ -136,58 +230,8 @@ class App(tk.Tk):
         self.tree.tag_configure("veteran", background="#e8f5e9")
         self.tree.tag_configure("legacy", background="#fff8e1")
         self.tree.tag_configure("error", background="#ffebee")
-
-        # Options
-        opt = ttk.LabelFrame(root, text="Fix options", padding=10)
-        opt.pack(fill=tk.X, pady=(0, 8))
-
-        mode_row = ttk.Frame(opt)
-        mode_row.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(mode_row, text="Set difficulty to:").pack(side=tk.LEFT, padx=(0, 12))
-        ttk.Radiobutton(mode_row, text="Veteran  (harder)", variable=self.mode, value="Veteran").pack(
-            side=tk.LEFT, padx=(0, 16)
-        )
-        ttk.Radiobutton(mode_row, text="Legacy / Normal", variable=self.mode, value="Legacy").pack(side=tk.LEFT)
-
-        ttk.Checkbutton(
-            opt,
-            text="Also update the game’s automatic backup copies (SaveXX_b1 / _b2)  — recommended",
-            variable=self.include_rotating,
-        ).pack(anchor=tk.W)
-
-        # Actions
-        actions = ttk.Frame(root)
-        actions.pack(fill=tk.X, pady=(0, 6))
-        self.apply_btn = ttk.Button(
-            actions,
-            text="Apply fix to selected character(s)",
-            style="Big.TButton",
-            command=self.apply_fix,
-        )
-        self.apply_btn.pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(actions, text="Open backups folder", command=self.open_backups).pack(
-            side=tk.LEFT, padx=(0, 8)
-        )
-        ttk.Button(actions, text="Open save folder", command=self.open_save_folder).pack(
-            side=tk.LEFT, padx=(0, 8)
-        )
-        ttk.Button(actions, text="Help", command=self.show_help).pack(side=tk.RIGHT)
-
-        # Log
-        log_fr = ttk.LabelFrame(root, text="Activity log", padding=6)
-        log_fr.pack(fill=tk.BOTH, expand=False, pady=(0, 6))
-        self.log = tk.Text(
-            log_fr,
-            height=7,
-            wrap=tk.WORD,
-            font=("Consolas", 9),
-            state=tk.DISABLED,
-            background="#f7f7f7",
-        )
-        self.log.pack(fill=tk.BOTH, expand=True)
-
-        # Status bar
-        ttk.Label(root, textvariable=self.status, style="Status.TLabel").pack(anchor=tk.W)
+        # Double-click a character → apply immediately (after confirm)
+        self.tree.bind("<Double-1>", lambda _e: self.apply_fix())
 
     # ----- helpers -----
 
@@ -199,8 +243,18 @@ class App(tk.Tk):
 
     def set_busy(self, busy: bool) -> None:
         self._busy = busy
-        state = tk.DISABLED if busy else tk.NORMAL
-        self.apply_btn.configure(state=state)
+        if busy:
+            self.apply_btn.configure(
+                state=tk.DISABLED,
+                text="Working… please wait",
+                bg="#757575",
+            )
+        else:
+            self.apply_btn.configure(
+                state=tk.NORMAL,
+                text="▶  APPLY FIX TO SELECTED CHARACTER(S)",
+                bg="#2e7d32",
+            )
 
     def browse_folder(self) -> None:
         initial = self.save_dir.get() or str(Path.home())
@@ -231,7 +285,8 @@ class App(tk.Tk):
                 "2. Click Refresh list (folder is usually auto-detected).\n"
                 "3. Click the character you want (Ctrl+click for more).\n"
                 "4. Choose Veteran or Legacy / Normal.\n"
-                "5. Click Apply fix.\n"
+                "5. Click the big green APPLY FIX button at the bottom\n"
+                "   (or double-click a character).\n"
                 "6. Start the game and check the load menu icon.\n\n"
                 "Backups\n"
                 "───────\n"
