@@ -135,6 +135,12 @@ Editing saves can go wrong if the game is running or Cloud fights you — that�
 
 ---
 
+## For developers
+
+Deep dive on the save format, the original corruption bug, and how the patch works:
+
+**[DEVELOPER_NOTES.md](DEVELOPER_NOTES.md)**
+
 ## For people who want to build from source
 
 You don’t need this if you only want the EXE.
