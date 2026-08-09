@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.spec.bak
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini
+_difficulty_fix_backups/
+*.sav
